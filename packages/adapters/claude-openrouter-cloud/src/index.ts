@@ -116,7 +116,7 @@ Adapter: claude_openrouter_cloud
 Runs the Claude Code CLI against OpenRouter's Anthropic-compatible API with one model. On every run the adapter sets ANTHROPIC_BASE_URL=${OPENROUTER_BASE_URL}, ANTHROPIC_AUTH_TOKEN=<OPENROUTER_API_KEY>, ANTHROPIC_API_KEY="", and maps ANTHROPIC_DEFAULT_OPUS_MODEL, ANTHROPIC_DEFAULT_SONNET_MODEL, ANTHROPIC_DEFAULT_HAIKU_MODEL, ANTHROPIC_DEFAULT_FABLE_MODEL and CLAUDE_CODE_SUBAGENT_MODEL to the configured model; these keys cannot be overridden through config env.
 
 Core fields:
-- model (string, required): OpenRouter model ID, e.g. anthropic/claude-sonnet-4 or qwen/qwen3-coder:free. Falls back to OPENROUTER_MODEL, then ANTHROPIC_MODEL, when unset. A run with no model fails with claude_openrouter_model_missing.
+- model (string, optional): OpenRouter model ID, e.g. anthropic/claude-sonnet-4 or qwen/qwen3-coder:free. When unset, the run env's OPENROUTER_MODEL, then ANTHROPIC_MODEL, is used; set either on the agent, its environment or the project. A run with no model from any source fails with claude_openrouter_model_missing.
 - env.OPENROUTER_API_KEY (string, required): OpenRouter API key. Bind it to a company secret rather than a plain value. For local targets the host OPENROUTER_API_KEY is used when config env has none. A run with no key fails with claude_openrouter_api_key_missing.
 - cwd (string, optional): default absolute working directory fallback for the agent process (created if missing when possible)
 - instructionsFilePath (string, optional): absolute path to a markdown instructions file injected at runtime

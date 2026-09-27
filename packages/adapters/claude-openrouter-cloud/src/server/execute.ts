@@ -458,7 +458,8 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     // OpenRouter may bill differently or reject.
     const errorMessage =
       "No OpenRouter model configured for this agent. Set the agent model to an OpenRouter model ID " +
-      "(e.g. anthropic/claude-sonnet-4 or qwen/qwen3-coder:free).";
+      "(e.g. anthropic/claude-sonnet-4 or qwen/qwen3-coder:free), or set OPENROUTER_MODEL in the agent, " +
+      "environment or project env.";
     await onLog("stderr", `[paperclip] ${errorMessage}\n`);
     return {
       exitCode: 1,

@@ -229,11 +229,13 @@ export async function testEnvironment(
     considerHostEnv ? { ...process.env, ...env } : env,
   );
   if (!configuredModel) {
+    // Warn, not fail: project env is merged in only at run time, so a
+    // project-level OLLAMA_MODEL is invisible to this agent-scoped Test.
     checks.push({
       code: "ollama_model_missing",
-      level: "error",
+      level: "warn",
       message: "No Ollama model configured for this agent.",
-      hint: "Set the agent model to an Ollama model tag (e.g. qwen3-coder:latest), then retry the Test.",
+      hint: "Set the agent model to an Ollama model tag (e.g. qwen3-coder:latest), or set OLLAMA_MODEL in the agent, environment or project env. Runs fail without a model from one of these.",
     });
   } else if (ollama.reachable) {
     if (ollama.modelIds.has(configuredModel)) {

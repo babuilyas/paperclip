@@ -186,7 +186,7 @@ describe("ollama server reachability check", () => {
 });
 
 describe("ollama model configuration checks", () => {
-  it("fails the Test and skips the hello probe when no model is configured", async () => {
+  it("warns and skips the hello probe when no model is configured", async () => {
     stubOllamaReachable([OLLAMA_MODEL]);
 
     const result = await testEnvironment({
@@ -197,13 +197,13 @@ describe("ollama model configuration checks", () => {
       environmentName: "Daytona",
     });
 
-    expect(result.status).toBe("fail");
+    expect(result.status).not.toBe("fail");
     expect(result.checks).toContainEqual(
       expect.objectContaining({
         code: "ollama_model_missing",
-        level: "error",
+        level: "warn",
         message: "No Ollama model configured for this agent.",
-        hint: "Set the agent model to an Ollama model tag (e.g. qwen3-coder:latest), then retry the Test.",
+        hint: "Set the agent model to an Ollama model tag (e.g. qwen3-coder:latest), or set OLLAMA_MODEL in the agent, environment or project env. Runs fail without a model from one of these.",
       }),
     );
     expect(runAdapterExecutionTargetProcess).not.toHaveBeenCalled();
