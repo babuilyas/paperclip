@@ -521,6 +521,52 @@ describe("claude openrouter remote execution", () => {
       expect(args).toContain("--print");
     });
 
+    it("uses OPENROUTER_MODEL from the run env (agent, environment or project env) when no agent model is set", async () => {
+      const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-claude-openrouter-env-model-"));
+      cleanupDirs.push(rootDir);
+      const workspaceDir = path.join(rootDir, "workspace");
+      await mkdir(workspaceDir, { recursive: true });
+
+      const result = await execute({
+        runId: "run-env-model",
+        agent: {
+          id: "agent-1",
+          companyId: "company-1",
+          name: "Claude Coder",
+          adapterType: "claude_openrouter_cloud",
+          adapterConfig: {},
+        },
+        runtime: {
+          sessionId: null,
+          sessionParams: null,
+          sessionDisplayId: null,
+          taskKey: null,
+        },
+        config: {
+          command: "claude",
+          env: { OPENROUTER_API_KEY: OPENROUTER_TEST_KEY, OPENROUTER_MODEL },
+        },
+        context: {
+          paperclipWorkspace: {
+            cwd: workspaceDir,
+            source: "project_primary",
+          },
+        },
+        executionTransport: sshTransport(),
+        onLog: async () => {},
+      });
+
+      expect(result.errorCode).not.toBe("claude_openrouter_model_missing");
+      expect(runChildProcess).toHaveBeenCalledTimes(1);
+      const call = runChildProcess.mock.calls[0] as unknown as
+        | [string, string, string[], { env: Record<string, string> }]
+        | undefined;
+      expect(call?.[2]).toEqual(expect.arrayContaining(["--model", OPENROUTER_MODEL]));
+      for (const key of OPENROUTER_MODEL_ALIAS_ENV_KEYS) {
+        expect(call?.[3].env[key]).toBe(OPENROUTER_MODEL);
+      }
+    });
+
     it("fails with claude_openrouter_model_missing and never spawns when no model is configured", async () => {
       const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-claude-openrouter-no-model-"));
       cleanupDirs.push(rootDir);

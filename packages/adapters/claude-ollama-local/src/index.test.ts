@@ -46,6 +46,12 @@ describe("resolveClaudeOllamaModel", () => {
     expect(resolveClaudeOllamaModel(undefined, { ANTHROPIC_MODEL: " qwen3:32b " })).toBe("qwen3:32b");
   });
 
+  it("prefers OLLAMA_MODEL over ANTHROPIC_MODEL when no model is configured", () => {
+    expect(resolveClaudeOllamaModel(undefined, { OLLAMA_MODEL: " qwen3-coder:latest ", ANTHROPIC_MODEL: "other" }))
+      .toBe("qwen3-coder:latest");
+    expect(resolveClaudeOllamaModel("", { OLLAMA_MODEL: "  ", ANTHROPIC_MODEL: "qwen3:32b" })).toBe("qwen3:32b");
+  });
+
   it("keeps an explicit model ahead of the environment override", () => {
     expect(resolveClaudeOllamaModel("qwen3-coder:latest", { ANTHROPIC_MODEL: "other" }))
       .toBe("qwen3-coder:latest");

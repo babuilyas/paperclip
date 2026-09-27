@@ -426,7 +426,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     // silent fallback would send a Claude ID to the Ollama server.
     const errorMessage =
       "No Ollama model configured for this agent. Set the agent model to an Ollama model tag " +
-      "(e.g. qwen3-coder:latest) and make sure it is pulled on the Ollama server (`ollama pull <tag>`).";
+      "(e.g. qwen3-coder:latest), or set OLLAMA_MODEL in the agent, environment or project env, and make sure it is pulled on the Ollama server (`ollama pull <tag>`).";
     await onLog("stderr", `[paperclip] ${errorMessage}\n`);
     return {
       exitCode: 1,

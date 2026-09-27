@@ -40,8 +40,10 @@ export function applyOllamaDefaultEnv(
 }
 
 /**
- * Resolve the Ollama model tag. No default: Ollama tags are disjoint from
- * Claude model IDs and a silent fallback would send a Claude ID to Ollama.
+ * Resolve the Ollama model tag: the agent model, then OLLAMA_MODEL, then
+ * ANTHROPIC_MODEL from the run env (agent, environment or project env). No
+ * default: Ollama tags are disjoint from Claude model IDs and a silent
+ * fallback would send a Claude ID to Ollama.
  */
 export function resolveClaudeOllamaModel(
   model: unknown,
@@ -49,8 +51,11 @@ export function resolveClaudeOllamaModel(
 ): string {
   const configured = typeof model === "string" ? model.trim() : "";
   if (configured) return configured;
-  const environmentModel = typeof env.ANTHROPIC_MODEL === "string" ? env.ANTHROPIC_MODEL.trim() : "";
-  return environmentModel;
+  for (const key of ["OLLAMA_MODEL", "ANTHROPIC_MODEL"]) {
+    const value = env[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
 }
 
 export const type = "claude_ollama_local";
@@ -69,7 +74,7 @@ Adapter: claude_ollama_local
 Runs the Claude Code CLI against a local Ollama server. The adapter forces ANTHROPIC_BASE_URL=${OLLAMA_BASE_URL}, ANTHROPIC_AUTH_TOKEN=ollama, and ANTHROPIC_API_KEY="" on every run; these keys cannot be overridden through config env.
 
 Core fields:
-- model (string, required): Ollama model tag, e.g. qwen3-coder:latest. Falls back to ANTHROPIC_MODEL when unset. A run with no model fails with claude_ollama_model_missing. List installed tags with \`ollama list\` or pull one with \`ollama pull <tag>\`.
+- model (string, optional): Ollama model tag, e.g. qwen3-coder:latest. When unset, the run env's OLLAMA_MODEL, then ANTHROPIC_MODEL, is used; set either on the agent, its environment or the project. A run with no model from any source fails with claude_ollama_model_missing. List installed tags with \`ollama list\` or pull one with \`ollama pull <tag>\`.
 - cwd (string, optional): default absolute working directory fallback for the agent process (created if missing when possible)
 - instructionsFilePath (string, optional): absolute path to a markdown instructions file injected at runtime
 - effort (string, optional): reasoning effort passed via --effort (low|medium|high); support depends on the Ollama model

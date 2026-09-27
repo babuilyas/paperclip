@@ -252,11 +252,13 @@ export async function testEnvironment(
   }
 
   if (!configuredModel) {
+    // Warn, not fail: project env is merged in only at run time, so a
+    // project-level OPENROUTER_MODEL is invisible to this agent-scoped Test.
     checks.push({
       code: "openrouter_model_missing",
-      level: "error",
+      level: "warn",
       message: "No OpenRouter model configured for this agent.",
-      hint: "Set the agent model to an OpenRouter model ID (e.g. qwen/qwen3-coder:free), then retry the Test.",
+      hint: "Set the agent model to an OpenRouter model ID (e.g. qwen/qwen3-coder:free), or set OPENROUTER_MODEL in the agent, environment or project env. Runs fail without a model from one of these.",
     });
   } else {
     const catalog = await listClaudeOpenRouterModels();

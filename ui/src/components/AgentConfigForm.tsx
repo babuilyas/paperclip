@@ -1744,9 +1744,17 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                 }}
                 open={modelOpen}
                 onOpenChange={setModelOpen}
-                defaultLabel={adapterType === "claude_local" ? `Default (${DEFAULT_CLAUDE_LOCAL_MODEL})` : undefined}
-                allowDefault={adapterType !== "opencode_local" && adapterType !== "pi_local" && adapterType !== "paperclip_runner" && adapterType !== "claude_ollama_local" && adapterType !== "claude_openrouter_cloud"}
-                required={adapterType === "opencode_local" || adapterType === "pi_local" || adapterType === "claude_ollama_local" || adapterType === "claude_openrouter_cloud"}
+                defaultLabel={
+                  adapterType === "claude_local"
+                    ? `Default (${DEFAULT_CLAUDE_LOCAL_MODEL})`
+                    : adapterType === "claude_ollama_local"
+                      ? "From env (OLLAMA_MODEL)"
+                      : adapterType === "claude_openrouter_cloud"
+                        ? "From env (OPENROUTER_MODEL)"
+                        : undefined
+                }
+                allowDefault={adapterType !== "opencode_local" && adapterType !== "pi_local" && adapterType !== "paperclip_runner"}
+                required={adapterType === "opencode_local" || adapterType === "pi_local"}
                 groupByProvider={adapterType === "opencode_local" || adapterType === "pi_local"}
                 creatable
                 detectedModel={detectedModel}
