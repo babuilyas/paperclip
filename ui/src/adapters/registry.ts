@@ -1,5 +1,7 @@
 import type { UIAdapterModule } from "./types";
 import { claudeLocalUIAdapter } from "./claude-local";
+import { claudeOllamaLocalUIAdapter } from "./claude-ollama-local";
+import { claudeOpenRouterCloudUIAdapter } from "./claude-openrouter-cloud";
 import { codexLocalUIAdapter } from "./codex-local";
 import { paperclipRunnerUIAdapter } from "./paperclip-runner";
 import { cursorCloudUIAdapter } from "./cursor-cloud";
@@ -55,6 +57,8 @@ setDynamicParserResultNotifier(notifyAdapterChange);
 function registerBuiltInUIAdapters() {
   for (const adapter of [
     claudeLocalUIAdapter,
+    claudeOllamaLocalUIAdapter,
+    claudeOpenRouterCloudUIAdapter,
     codexLocalUIAdapter,
     paperclipRunnerUIAdapter,
     cursorCloudUIAdapter,

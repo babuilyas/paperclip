@@ -61,6 +61,8 @@ describe("built-in runtime connection tool delivery", () => {
   const expectedStrategies = new Map([
     ["acpx_local", "environment"],
     ["claude_local", "native_mcp"],
+    ["claude_ollama_local", "native_mcp"],
+    ["claude_openrouter_cloud", "native_mcp"],
     ["codex_local", "native_mcp"],
     ["cursor_cloud", "invocation_context"],
     ["cursor", "environment"],

@@ -879,6 +879,8 @@ const PUSH_CAPABILITY_ENV_KEYS = ["GH_TOKEN", "GITHUB_TOKEN"] as const;
 // Keep this in sync with local adapters that require a git workspace before launch.
 const GIT_SENSITIVE_LOCAL_ADAPTER_TYPES = new Set([
   "claude_local",
+  "claude_ollama_local",
+  "claude_openrouter_cloud",
   "codex_local",
   "cursor",
   "gemini_local",
@@ -1270,6 +1272,8 @@ const ISSUE_RESPONSIBLE_USER_WAKE_REASONS = new Set([
 ]);
 const SESSIONED_LOCAL_ADAPTERS = new Set([
   "claude_local",
+  "claude_ollama_local",
+  "claude_openrouter_cloud",
   "codex_local",
   "cursor",
   "gemini_local",

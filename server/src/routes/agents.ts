@@ -286,6 +286,9 @@ function mergeDesiredSkillEntries(
   return Array.from(merged.values());
 }
 
+// Adapters that own their model endpoint and credentials, so an agent bound to
+// one never carries an AI-connection binding.
+const ADAPTER_OWNED_ENDPOINT_TYPES = new Set<string>(["claude_ollama_local", "claude_openrouter_cloud"]);
 const RUN_LOG_DEFAULT_LIMIT_BYTES = 256_000;
 const RUN_LOG_MAX_LIMIT_BYTES = 1024 * 1024;
 
@@ -5509,8 +5512,26 @@ export function agentRoutes(
         adapterConfig: patchData.adapterConfig,
       });
     }
-    if (existing.runtimeConfig.aiConnection && requestedRuntimeConfig && !requestedRuntimeConfig.aiConnection) requestedRuntimeConfig.aiConnection = existing.runtimeConfig.aiConnection;
-    const nextAiBinding = aiConnectionBindingSchema.safeParse(requestedRuntimeConfig?.aiConnection ?? existing.runtimeConfig.aiConnection).data;
+    if (existing.runtimeConfig.aiConnection && requestedRuntimeConfig && !requestedRuntimeConfig.aiConnection && !ADAPTER_OWNED_ENDPOINT_TYPES.has(requestedAdapterType)) requestedRuntimeConfig.aiConnection = existing.runtimeConfig.aiConnection;
+    // claude_ollama_local and claude_openrouter_cloud take no AI connection:
+    // the adapter owns its endpoint (the local Ollama server, or OpenRouter
+    // with the agent's OPENROUTER_API_KEY env). When an agent
+    // switches to it, drop a binding left over from the previous harness instead
+    // of failing the save — the configuration form renders no AI-connection
+    // picker for this adapter, so the operator cannot clear it themselves.
+    if (ADAPTER_OWNED_ENDPOINT_TYPES.has(requestedAdapterType)) {
+      const staleAiBinding = requestedRuntimeConfig?.aiConnection ?? existing.runtimeConfig.aiConnection;
+      if (staleAiBinding) {
+        // Drop the key rather than null it: agentRuntimeConfigSchema accepts an
+        // absent aiConnection but not an explicit null.
+        const clearedRuntimeConfig = { ...(requestedRuntimeConfig ?? existing.runtimeConfig) };
+        delete clearedRuntimeConfig.aiConnection;
+        requestedRuntimeConfig = clearedRuntimeConfig;
+      }
+    }
+    const nextAiBinding = ADAPTER_OWNED_ENDPOINT_TYPES.has(requestedAdapterType)
+      ? undefined
+      : aiConnectionBindingSchema.safeParse(requestedRuntimeConfig?.aiConnection ?? existing.runtimeConfig.aiConnection).data;
     if (nextAiBinding) {
       await assertCanUpdateAgent(req, existing);
       const changed = JSON.stringify(nextAiBinding) !== JSON.stringify(existing.runtimeConfig.aiConnection);

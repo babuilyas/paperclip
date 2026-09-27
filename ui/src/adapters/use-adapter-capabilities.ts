@@ -21,6 +21,8 @@ const ALL_FALSE: AdapterCapabilities = {
  */
 const KNOWN_DEFAULTS: Record<string, AdapterCapabilities> = {
   claude_local: { supportsInstructionsBundle: true, supportsSkills: true, supportsLocalAgentJwt: true, requiresMaterializedRuntimeSkills: false, supportsAcp: true, login: { panelMode: "submitted_browser_code", timeoutPolicy: "fixed" } },
+  claude_ollama_local: { supportsInstructionsBundle: true, supportsSkills: true, supportsLocalAgentJwt: true, requiresMaterializedRuntimeSkills: false, supportsAcp: false },
+  claude_openrouter_cloud: { supportsInstructionsBundle: true, supportsSkills: true, supportsLocalAgentJwt: true, requiresMaterializedRuntimeSkills: false, supportsAcp: false },
   codex_local: { supportsInstructionsBundle: true, supportsSkills: true, supportsLocalAgentJwt: true, requiresMaterializedRuntimeSkills: false, supportsAcp: true, login: { panelMode: "displayed_code", timeoutPolicy: "caller_bounded" } },
   paperclip_runner: { supportsInstructionsBundle: true, supportsSkills: true, supportsLocalAgentJwt: false, requiresMaterializedRuntimeSkills: false, supportsAcp: false },
   cursor: { supportsInstructionsBundle: true, supportsSkills: true, supportsLocalAgentJwt: true, requiresMaterializedRuntimeSkills: true, supportsAcp: false },

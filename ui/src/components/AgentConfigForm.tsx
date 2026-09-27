@@ -74,6 +74,8 @@ import {
 import { defaultCreateValues } from "./agent-config-defaults";
 import { getUIAdapter } from "../adapters";
 import { ClaudeLocalAdvancedFields } from "../adapters/claude-local/config-fields";
+import { ClaudeOllamaAdvancedFields } from "../adapters/claude-ollama-local/config-fields";
+import { ClaudeOpenRouterAdvancedFields } from "../adapters/claude-openrouter-cloud/config-fields";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { ChoosePathButton } from "./PathInstructionsModal";
 import { OpenCodeLogoIcon } from "./OpenCodeLogoIcon";
@@ -173,7 +175,7 @@ const emptyOverlay: AgentConfigOverlay = {
 const EMPTY_ENV: Record<string, EnvBinding> = {};
 
 export function supportsAdapterModelRefresh(adapterType: string): boolean {
-  return adapterType === "claude_local" || adapterType === "codex_local" || adapterType === "paperclip_runner" || adapterType === "opencode_local";
+  return adapterType === "claude_local" || adapterType === "claude_ollama_local" || adapterType === "claude_openrouter_cloud" || adapterType === "codex_local" || adapterType === "paperclip_runner" || adapterType === "opencode_local";
 }
 
 export function resolvePaperclipRunnerTransitionModel(
@@ -962,6 +964,8 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
   const renderAdapterFields = (section: AdapterConfigSection) => (
     <>
       {adapterType === "claude_local" && <ClaudeLocalAdvancedFields {...adapterFieldProps} section={section} />}
+      {adapterType === "claude_ollama_local" && <ClaudeOllamaAdvancedFields {...adapterFieldProps} section={section} />}
+      {adapterType === "claude_openrouter_cloud" && <ClaudeOpenRouterAdvancedFields {...adapterFieldProps} section={section} />}
       <uiAdapter.ConfigFields {...adapterFieldProps} section={section} hideModel={isLocal} />
     </>
   );
@@ -1741,8 +1745,8 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                 open={modelOpen}
                 onOpenChange={setModelOpen}
                 defaultLabel={adapterType === "claude_local" ? `Default (${DEFAULT_CLAUDE_LOCAL_MODEL})` : undefined}
-                allowDefault={adapterType !== "opencode_local" && adapterType !== "pi_local" && adapterType !== "paperclip_runner"}
-                required={adapterType === "opencode_local" || adapterType === "pi_local"}
+                allowDefault={adapterType !== "opencode_local" && adapterType !== "pi_local" && adapterType !== "paperclip_runner" && adapterType !== "claude_ollama_local" && adapterType !== "claude_openrouter_cloud"}
+                required={adapterType === "opencode_local" || adapterType === "pi_local" || adapterType === "claude_ollama_local" || adapterType === "claude_openrouter_cloud"}
                 groupByProvider={adapterType === "opencode_local" || adapterType === "pi_local"}
                 creatable
                 detectedModel={detectedModel}
@@ -1882,6 +1886,8 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                     placeholder={
                       ({
                         claude_local: "claude",
+                        claude_ollama_local: "claude",
+                        claude_openrouter_cloud: "claude",
                         codex_local: "codex",
                         gemini_local: "gemini",
                         kimi_local: "kimi",

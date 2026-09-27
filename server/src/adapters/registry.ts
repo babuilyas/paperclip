@@ -27,6 +27,34 @@ import {
   models as claudeModels,
 } from "@paperclipai/adapter-claude-local";
 import {
+  execute as claudeOllamaExecute,
+  listClaudeOllamaSkills,
+  syncClaudeOllamaSkills,
+  listClaudeOllamaModels,
+  refreshClaudeOllamaModels,
+  testEnvironment as claudeOllamaTestEnvironment,
+  sessionCodec as claudeOllamaSessionCodec,
+  getConfigSchema as getClaudeOllamaConfigSchema,
+} from "@paperclipai/adapter-claude-ollama-local/server";
+import {
+  agentConfigurationDoc as claudeOllamaAgentConfigurationDoc,
+  models as claudeOllamaModels,
+} from "@paperclipai/adapter-claude-ollama-local";
+import {
+  execute as claudeOpenRouterExecute,
+  listClaudeOpenRouterSkills,
+  syncClaudeOpenRouterSkills,
+  listClaudeOpenRouterModels,
+  refreshClaudeOpenRouterModels,
+  testEnvironment as claudeOpenRouterTestEnvironment,
+  sessionCodec as claudeOpenRouterSessionCodec,
+  getConfigSchema as getClaudeOpenRouterConfigSchema,
+} from "@paperclipai/adapter-claude-openrouter-cloud/server";
+import {
+  agentConfigurationDoc as claudeOpenRouterAgentConfigurationDoc,
+  models as claudeOpenRouterModels,
+} from "@paperclipai/adapter-claude-openrouter-cloud";
+import {
   execute as codexExecute,
   listCodexSkills,
   syncCodexSkills,
@@ -281,6 +309,62 @@ const claudeLocalAdapter: ServerAdapterModule = {
   getConfigSchema: getClaudeConfigSchema,
   getQuotaWindows: claudeGetQuotaWindows,
   loginCapability: claudeLoginCapability,
+};
+
+// Claude Code against a local Ollama server. Same CLI lane and session
+// machinery as claude_local, but the adapter owns the endpoint identity: it
+// forces ANTHROPIC_BASE_URL at the local Ollama server, requires an Ollama
+// model tag, and reports runs under the free local `ollama` billing identity.
+// No login capability (Ollama needs no credentials) and no quota windows
+// (usage stays local to the operator's machine).
+const claudeOllamaLocalAdapter: ServerAdapterModule = {
+  type: "claude_ollama_local",
+  runtimeToolDelivery: "native_mcp",
+  execute: stampClaudeAgentIdHeader(claudeOllamaExecute),
+  testEnvironment: claudeOllamaTestEnvironment,
+  listSkills: listClaudeOllamaSkills,
+  syncSkills: syncClaudeOllamaSkills,
+  sessionCodec: claudeOllamaSessionCodec,
+  sessionManagement: getAdapterSessionManagement("claude_ollama_local") ?? undefined,
+  models: claudeOllamaModels,
+  listModels: listClaudeOllamaModels,
+  refreshModels: refreshClaudeOllamaModels,
+  supportsLocalAgentJwt: true,
+  supportsInstructionsBundle: true,
+  instructionsPathKey: "instructionsFilePath",
+  requiresMaterializedRuntimeSkills: false,
+  getRuntimeCommandSpec: (config) =>
+    buildNpmRuntimeCommandSpec(config, "claude", "@anthropic-ai/claude-code"),
+  agentConfigurationDoc: claudeOllamaAgentConfigurationDoc,
+  getConfigSchema: getClaudeOllamaConfigSchema,
+};
+
+// Claude Code against OpenRouter's Anthropic-compatible API with one model.
+// Same CLI lane and session machinery as claude_local, but the adapter owns
+// the endpoint identity: it forces ANTHROPIC_BASE_URL at OpenRouter, uses the
+// agent's OPENROUTER_API_KEY env (plain or secret) as the auth token, maps
+// every Claude model alias to the configured model, and reports runs under
+// the `openrouter` biller. No login capability and no quota windows.
+const claudeOpenRouterCloudAdapter: ServerAdapterModule = {
+  type: "claude_openrouter_cloud",
+  runtimeToolDelivery: "native_mcp",
+  execute: stampClaudeAgentIdHeader(claudeOpenRouterExecute),
+  testEnvironment: claudeOpenRouterTestEnvironment,
+  listSkills: listClaudeOpenRouterSkills,
+  syncSkills: syncClaudeOpenRouterSkills,
+  sessionCodec: claudeOpenRouterSessionCodec,
+  sessionManagement: getAdapterSessionManagement("claude_openrouter_cloud") ?? undefined,
+  models: claudeOpenRouterModels,
+  listModels: listClaudeOpenRouterModels,
+  refreshModels: refreshClaudeOpenRouterModels,
+  supportsLocalAgentJwt: true,
+  supportsInstructionsBundle: true,
+  instructionsPathKey: "instructionsFilePath",
+  requiresMaterializedRuntimeSkills: false,
+  getRuntimeCommandSpec: (config) =>
+    buildNpmRuntimeCommandSpec(config, "claude", "@anthropic-ai/claude-code"),
+  agentConfigurationDoc: claudeOpenRouterAgentConfigurationDoc,
+  getConfigSchema: getClaudeOpenRouterConfigSchema,
 };
 
 const acpxLocalAdapter: ServerAdapterModule = {
@@ -868,6 +952,8 @@ function registerBuiltInAdapters() {
   for (const adapter of [
     acpxLocalAdapter,
     claudeLocalAdapter,
+    claudeOllamaLocalAdapter,
+    claudeOpenRouterCloudAdapter,
     codexLocalAdapter,
     paperclipRunnerAdapter,
     openCodeLocalAdapter,
