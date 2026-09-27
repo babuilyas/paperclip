@@ -35,6 +35,8 @@ export const AGENT_ADAPTER_TYPES = [
   "process",
   "http",
   "claude_local",
+  "claude_ollama_local",
+  "claude_openrouter_cloud",
   "codex_local",
   "paperclip_runner",
   "cursor_cloud",

@@ -89,6 +89,12 @@ importers:
       '@paperclipai/adapter-claude-local':
         specifier: workspace:*
         version: link:../packages/adapters/claude-local
+      '@paperclipai/adapter-claude-ollama-local':
+        specifier: workspace:*
+        version: link:../packages/adapters/claude-ollama-local
+      '@paperclipai/adapter-claude-openrouter-cloud':
+        specifier: workspace:*
+        version: link:../packages/adapters/claude-openrouter-cloud
       '@paperclipai/adapter-codex-local':
         specifier: workspace:*
         version: link:../packages/adapters/codex-local
@@ -190,6 +196,44 @@ importers:
       '@anthropic-ai/sdk':
         specifier: 0.129.0
         version: 0.129.0(zod@4.6.7)
+      '@paperclipai/adapter-utils':
+        specifier: workspace:*
+        version: link:../../adapter-utils
+      '@paperclipai/shared':
+        specifier: workspace:*
+        version: link:../../shared
+      picocolors:
+        specifier: ^1.1.1
+        version: 1.1.1
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
+  packages/adapters/claude-ollama-local:
+    dependencies:
+      '@paperclipai/adapter-utils':
+        specifier: workspace:*
+        version: link:../../adapter-utils
+      '@paperclipai/shared':
+        specifier: workspace:*
+        version: link:../../shared
+      picocolors:
+        specifier: ^1.1.1
+        version: 1.1.1
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
+  packages/adapters/claude-openrouter-cloud:
+    dependencies:
       '@paperclipai/adapter-utils':
         specifier: workspace:*
         version: link:../../adapter-utils
@@ -968,6 +1012,12 @@ importers:
       '@paperclipai/adapter-claude-local':
         specifier: workspace:*
         version: link:../packages/adapters/claude-local
+      '@paperclipai/adapter-claude-ollama-local':
+        specifier: workspace:*
+        version: link:../packages/adapters/claude-ollama-local
+      '@paperclipai/adapter-claude-openrouter-cloud':
+        specifier: workspace:*
+        version: link:../packages/adapters/claude-openrouter-cloud
       '@paperclipai/adapter-codex-local':
         specifier: workspace:*
         version: link:../packages/adapters/codex-local
@@ -1234,6 +1284,12 @@ importers:
       '@paperclipai/adapter-claude-local':
         specifier: workspace:*
         version: link:../packages/adapters/claude-local
+      '@paperclipai/adapter-claude-ollama-local':
+        specifier: workspace:*
+        version: link:../packages/adapters/claude-ollama-local
+      '@paperclipai/adapter-claude-openrouter-cloud':
+        specifier: workspace:*
+        version: link:../packages/adapters/claude-openrouter-cloud
       '@paperclipai/adapter-codex-local':
         specifier: workspace:*
         version: link:../packages/adapters/codex-local

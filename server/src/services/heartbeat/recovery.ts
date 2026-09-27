@@ -303,6 +303,8 @@ export const HEARTBEAT_RUN_TERMINAL_STATUSES = [
 
 const SESSIONED_LOCAL_ADAPTERS = new Set([
   "claude_local",
+  "claude_ollama_local",
+  "claude_openrouter_cloud",
   "codex_local",
   "cursor",
   "gemini_local",

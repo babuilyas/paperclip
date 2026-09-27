@@ -349,6 +349,9 @@ function mergeDesiredSkillEntries(
   return Array.from(merged.values());
 }
 
+// Adapters that own their model endpoint and credentials, so an agent bound to
+// one never carries an AI-connection binding.
+const ADAPTER_OWNED_ENDPOINT_TYPES = new Set<string>(["claude_ollama_local", "claude_openrouter_cloud"]);
 const RUN_LOG_DEFAULT_LIMIT_BYTES = 256_000;
 const RUN_LOG_MAX_LIMIT_BYTES = 1024 * 1024;
 
@@ -5814,7 +5817,27 @@ export function agentRoutes(
       requestedRuntimeConfig = { ...(requestedRuntimeConfig ?? existing.runtimeConfig),
         aiConnection: { provider: "github", method: "api_key", mode: "responsible_user" } };
     }
-    const nextAiBinding = aiRuntimeConnectionBindingSchema.safeParse(requestedRuntimeConfig ? requestedRuntimeConfig.aiConnection : existing.runtimeConfig.aiConnection).data;
+    // claude_ollama_local and claude_openrouter_cloud take no AI connection:
+    // the adapter owns its endpoint (the local Ollama server, or OpenRouter
+    // with the agent's OPENROUTER_API_KEY env). When an agent
+    // switches to it, drop a binding left over from the previous harness instead
+    // of failing the save — the configuration form renders no AI-connection
+    // picker for this adapter, so the operator cannot clear it themselves.
+    // This runs after the carry-over blocks above so a binding they restored
+    // from the previous harness is cleared too.
+    if (ADAPTER_OWNED_ENDPOINT_TYPES.has(requestedAdapterType)) {
+      const staleAiBinding = requestedRuntimeConfig?.aiConnection ?? existing.runtimeConfig.aiConnection;
+      if (staleAiBinding) {
+        // Drop the key rather than null it: agentRuntimeConfigSchema accepts an
+        // absent aiConnection but not an explicit null.
+        const clearedRuntimeConfig = { ...(requestedRuntimeConfig ?? existing.runtimeConfig) };
+        delete clearedRuntimeConfig.aiConnection;
+        requestedRuntimeConfig = clearedRuntimeConfig;
+      }
+    }
+    const nextAiBinding = ADAPTER_OWNED_ENDPOINT_TYPES.has(requestedAdapterType)
+      ? undefined
+      : aiRuntimeConnectionBindingSchema.safeParse(requestedRuntimeConfig ? requestedRuntimeConfig.aiConnection : existing.runtimeConfig.aiConnection).data;
     if (nextAiBinding) {
       await assertCanConfigureAgentSetup(req, existing);
       const changed = !isDeepStrictEqual(nextAiBinding, existing.runtimeConfig.aiConnection);
