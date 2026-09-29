@@ -159,7 +159,18 @@ type Step = 0 | 1 | 2 | 3 | 4 | 5;
 // wizard's registry-driven approach rather than a fixed union.
 type AdapterType = string;
 
-const ONBOARDING_ADAPTER_TYPES = new Set(["claude_local", "codex_local"]);
+const ONBOARDING_ADAPTER_TYPES = new Set([
+  "claude_local",
+  "codex_local",
+  // The OpenRouter and Ollama Claude sources ride the same connect-step path
+  // as the two above: they sit on the first-hire tile row (the recommended
+  // filter reads this set), they resolve the advisory model datalist from the
+  // same catalog query, and a restored one snaps to the "legacy" runner it
+  // actually is. Runner *discovery* stays off for them (`needsRunnerDiscovery`
+  // keeps its own list) — neither offers a native backend choice.
+  "claude_openrouter_cloud",
+  "claude_ollama_local",
+]);
 
 function restoreOnboardingAdapterType(savedAdapterType: unknown, provider?: unknown, savedCopilot?: unknown): AdapterType {
   if (savedAdapterType === "paperclip_runner" && provider === "pi") return "pi_local";
@@ -222,6 +233,11 @@ function adapterConfigHasAnthropicApiKey(config: Record<string, unknown>): boole
  */
 const MODEL_SOURCE_BRAND_MARKS: Record<string, string> = {
   claude_local: "/brands/claude-color.svg",
+  // A fixed purple fill rather than `currentColor`, so the same file serves
+  // the light and dark tile — unlike the Codex blossom below, whose white fill
+  // forced an inline copy. It distinguishes this tile from the Claude Code one
+  // beside it, which shares its registry icon.
+  claude_openrouter_cloud: "/brands/apps/openrouter.svg",
 };
 
 
@@ -259,11 +275,38 @@ const MODEL_SOURCE_INLINE_MARKS: Record<string, ComponentType<{ className?: stri
 const API_KEY_ENV_KEYS: Record<string, string> = {
   claude_local: ANTHROPIC_API_KEY_ENV_KEY,
   codex_local: "OPENAI_API_KEY",
+  claude_openrouter_cloud: "OPENROUTER_API_KEY",
 };
 
 function apiKeyEnvKeyFor(adapterType: string): string {
   return API_KEY_ENV_KEYS[adapterType] ?? "API_KEY";
 }
+
+/**
+ * The sources whose connect card asks for a model, and what that field
+ * presents.
+ *
+ * Both entries are Claude harness sources pointed at another provider's
+ * endpoint, and both adapters deliberately resolve no default model — a
+ * silent fallback would send a Claude model id to a provider that does not
+ * know it — so the model has to come from somewhere: typed here, or the
+ * source's own env var on the host (OPENROUTER_MODEL, OLLAMA_MODEL). The
+ * datalist id names the element holding the field's advisory suggestions; the
+ * placeholder shows the id shape that source expects.
+ */
+const MODEL_FIELD_SOURCES: Record<
+  string,
+  { datalistId: string; placeholder: string }
+> = {
+  claude_openrouter_cloud: {
+    datalistId: "openrouter-model-options",
+    placeholder: "anthropic/claude-sonnet-4.5",
+  },
+  claude_ollama_local: {
+    datalistId: "ollama-model-options",
+    placeholder: "qwen3-coder:latest",
+  },
+};
 
 function ModelSourceMark({
   type,
@@ -666,6 +709,13 @@ function OnboardingWizardInner({
   const [createdCompanyId, setCreatedCompanyId] = useState<string | null>(
     existingCompanyId ?? (saved?.createdCompanyId as string) ?? null
   );
+  // The selected source's capabilities, resolved before the saved-key reads and
+  // the credential-mode default below — both need to know whether the source
+  // has a sign-in at all. `useAdapterCapabilities` is an unconditional hook, so
+  // moving it here only changes hook order, which is stable across renders.
+  const getCapabilities = useAdapterCapabilities();
+  const adapterCaps = getCapabilities(adapterType);
+
   const savedKeys = useSavedProviderKeys(
     createdCompanyId,
     apiKeyEnvKeyFor(adapterType),
@@ -682,7 +732,13 @@ function OnboardingWizardInner({
   const selectedApiKey = savedKeys.options.find((option) => option.id === selectedApiKeyId);
   const credentialMode = credentialModeChoice ?? (
     (savedKeys.subscriptions.length > 0 || (adapterType === "claude_local" && savedKeys.storedLogin.data))
-      ? "subscription" : savedKeys.options.length || adapterType === "opencode_local" ? "api" : "subscription"
+      ? "subscription"
+      // A source with no login capability has no subscription to sign in to,
+      // so the key card is the only mode that can work. OpenCode, the
+      // OpenRouter Claude source, and the local Ollama one all arrive here;
+      // so would any future key-only adapter, which is why this reads the
+      // capability rather than naming the types.
+      : savedKeys.options.length || adapterCaps.login == null ? "api" : "subscription"
   );
   const [createdCompanyPrefix, setCreatedCompanyPrefix] = useState<
     string | null
@@ -940,9 +996,6 @@ function OnboardingWizardInner({
     createdCompanyGoalId, createdProjectId, createdIssueRef,
   ]);
 
-  const getCapabilities = useAdapterCapabilities();
-  const adapterCaps = getCapabilities(adapterType);
-
   // Resolve the login environment at render time, so the wizard can decide
   // whether to show the login panel before any adapter test runs. This
   // mirrors the agent configuration form's own resolution, including the
@@ -1006,7 +1059,11 @@ function OnboardingWizardInner({
   } = useQuery({
     queryKey: createdCompanyId ? queryKeys.agents.adapterModels(createdCompanyId, adapterType, null) : ["agents", "none", "adapter-models", adapterType, null],
     queryFn: () => agentsApi.adapterModels(createdCompanyId!, adapterType, { environmentId: null }),
-    enabled: Boolean(createdCompanyId) && effectiveOnboardingOpen && step === 4 && ONBOARDING_ADAPTER_TYPES.has(adapterType),
+    // Onboarding adapters fetch for their model picker; the OpenRouter and
+    // Ollama sources (in the same set) need it for their advisory model
+    // datalist even though they render no picker.
+    enabled: Boolean(createdCompanyId) && effectiveOnboardingOpen && step === 4
+      && ONBOARDING_ADAPTER_TYPES.has(adapterType),
     });
   // Automatic selection uses native Claude/Codex on qualified execution targets and
   // silently falls back to legacy on Windows, keeping the same onboarding UI.
@@ -1541,6 +1598,26 @@ function OnboardingWizardInner({
    * easing width so those changes read as one control rather than four.
    */
   const connectSourceLabel = CONNECT_SOURCE_NAMES[adapterType] ?? adapterType;
+  /**
+   * Whether Connect may be pressed with an empty API key.
+   *
+   * Type-scoped rather than a general rule, because each exemption is the
+   * named source's own contract: the OpenRouter probe resolves the key from
+   * the host when the config carries none, so an empty field means "use what
+   * this machine already holds" and the probe is what decides. The Ollama
+   * source has no key at all — its harness forces a fixed auth token against
+   * the local server — so there is nothing an empty field could be missing.
+   * Every other source's probe treats a missing key as a hard error with no
+   * fallback, so for them an empty field can only produce a refusal.
+   */
+  const emptyApiKeyAllowed =
+    adapterType === "claude_openrouter_cloud" ||
+    adapterType === "claude_ollama_local";
+  /**
+   * Whether the connect card has a key to ask for at all. Ollama's is the one
+   * that does not — see above — so its card carries only the model field.
+   */
+  const apiKeyFieldSupported = adapterType !== "claude_ollama_local";
   const connectCta: { label: string; icon: FooterPrimaryIcon; disabled: boolean } =
     setupError ? { label: "Retry", icon: "arrow", disabled: false }
       : retryLogin ? { label: "Retry sign-in", icon: "arrow", disabled: false } : connectProgress
@@ -1562,7 +1639,7 @@ function OnboardingWizardInner({
                 label: "Connect",
                 icon: "arrow",
                 disabled:
-                  !connectStepReady || (credentialMode === "api" && !apiKey.trim() && !selectedApiKey && !restoredApiCredential && !managedBindingForStep()),
+                  !connectStepReady || (credentialMode === "api" && !emptyApiKeyAllowed && !apiKey.trim() && !selectedApiKey && !restoredApiCredential && !managedBindingForStep()),
               }
           : // Nothing is chosen on arrival, and the row is what chooses. Until
             // it has been answered the button has nothing to do.
@@ -1807,6 +1884,20 @@ function OnboardingWizardInner({
         entries: [...entries].sort((a, b) => a.id.localeCompare(b.id))
       }));
   }, [filteredModels, adapterType]);
+
+  /**
+   * The catalog entries behind the model field's datalist — OpenRouter's
+   * public catalog with no key, Ollama's local server with none either. Kept
+   * apart from the `filteredModels`/`groupedModels` memos above, which were
+   * built for the picker this step no longer renders and key on a search
+   * state nothing sets anymore. The catalog query runs for every source on
+   * this step, so this only shapes what it already fetched.
+   */
+  const modelFieldSource = MODEL_FIELD_SOURCES[adapterType];
+  const modelSuggestions = useMemo(
+    () => (modelFieldSource ? adapterModels ?? [] : []),
+    [modelFieldSource, adapterModels],
+  );
 
   function reset() {
     onboardingDraftStorage.clear();
@@ -2095,7 +2186,13 @@ function OnboardingWizardInner({
       args,
       url,
       dangerouslySkipPermissions:
-        adapterType === "claude_local" || adapterType === "opencode_local",
+        adapterType === "claude_local" || adapterType === "opencode_local" ||
+        // The OpenRouter and Ollama execute lanes default this to true only
+        // when the flag is *unset*, and their UI builders assign the raw
+        // value — so an explicit false here would leave a non-interactive
+        // first run waiting on approval prompts nothing can answer.
+        adapterType === "claude_openrouter_cloud" ||
+        adapterType === "claude_ollama_local",
       dangerouslyBypassSandbox:
         adapterType === "codex_local"
           ? runner === "legacy" && DEFAULT_CODEX_LOCAL_BYPASS_APPROVALS_AND_SANDBOX
@@ -2142,7 +2239,12 @@ function OnboardingWizardInner({
     // present. If storing failed this stays false, and the right outcome is a
     // configuration with no credential — which the hire then blocks on — rather
     // than one that quietly falls back to embedding the value.
-    if (!managedBindingForStep() && credentialMode === "api" && (bindApiKey || selectedApiKey)
+    //
+    // Also guarded on the source having a key at all. Ollama has none, but it
+    // shares the "API_KEY" env-key fallback with OpenCode, so a saved key
+    // picked on that tile would otherwise ride a tile switch and get bound
+    // into a hire that has no use for it.
+    if (apiKeyFieldSupported && !managedBindingForStep() && credentialMode === "api" && (bindApiKey || selectedApiKey)
       && (!((savedConfig.env as Record<string, unknown> | undefined)?.[apiKeyEnvKeyFor(adapterType)])
         || selectedSavedKey || apiKey.trim())) {
       const env =
@@ -2464,8 +2566,11 @@ function OnboardingWizardInner({
       // Store the key before anything is built from it, so both the probe and the
       // hire describe it the same way — as a reference. A failure here stops the
       // hire rather than falling through to a configuration with no credential.
+      // Skipped for the keyless source, whose card never asks for one — a stale
+      // typed value from a previous tile is not an answer to a question this
+      // source did not ask.
       let apiKeyStored = false;
-      if (credentialMode === "api" && !selectedApiKey && apiKey.trim()) {
+      if (apiKeyFieldSupported && credentialMode === "api" && !selectedApiKey && apiKey.trim()) {
         apiKeyStored = await storeApiKeyUserSecret(createdCompanyId, isCurrent);
         if (!apiKeyStored || !isCurrent()) return;
       }
@@ -3197,31 +3302,68 @@ function OnboardingWizardInner({
                       </p>
                     ) : credentialMode === "api" ? (
                       <OnboardingLoginCard
-                        instruction={hasGatewaySelection || connectionModels ? "Choose a model for your saved connection" : savedKeys.options.length ? "Choose a saved API key or enter a new one" : `Provide your ${
-                          CONNECT_SOURCE_NAMES[adapterType] ?? adapterType
-                        } API key to connect`}
+                        instruction={(hasGatewaySelection || connectionModels)
+                          ? "Choose a model for your saved connection"
+                          : adapterType === "claude_ollama_local"
+                          ? "No API key needed — Ollama serves models from this machine. Name the model to run, or leave it blank to use the OLLAMA_MODEL already set on this machine"
+                          : savedKeys.options.length ? "Choose a saved API key or enter a new one" : adapterType === "claude_openrouter_cloud"
+                          ? "Paste your OpenRouter API key — or leave it blank to use the OPENROUTER_API_KEY already set on this machine"
+                          : `Provide your ${
+                            CONNECT_SOURCE_NAMES[adapterType] ?? adapterType
+                            } API key to connect`}
                       >
-                        {!hasGatewaySelection && <SavedProviderKeySelect {...savedKeys} disabled={loading || adapterEnvLoading} value={selectedApiKey?.id ?? ""} onChange={(id) => {
-                          setGatewayConnection(undefined);
-                          if (connectionModels) setModel("");
-                          setSelectedSavedKey(createdCompanyId ? { companyId: createdCompanyId, envKey: apiKeyEnvKeyFor(adapterType), id } : null);
-                          setApiKey("");
-                        }} />}
-                        {!selectedApiKey && !hasGatewaySelection && !connectionModels && <OnboardingCardField
-                          label="API key"
-                          placeholder="Enter API key here"
-                          masked
-                          // The card is the answer to the tile just pressed, so
-                          // the field is unambiguously the next thing. Carried
-                          // over from the key field this card replaced.
-                          autoFocus
-                          value={apiKey}
-                          onChange={(value) => {
-                            setSelectedSavedKey(createdCompanyId ? { companyId: createdCompanyId, envKey: apiKeyEnvKeyFor(adapterType), id: "" } : null);
-                            setApiKey(value);
-                          }}
-                          onSubmit={() => handleConnectStepPrimary()}
-                        />}
+                        {/* The card offers one children slot, so the rows space
+                            themselves; without this a saved-key chooser and a
+                            fresh key sat flush against each other. */}
+                        <div className="space-y-4">
+                          {apiKeyFieldSupported && !hasGatewaySelection && <SavedProviderKeySelect {...savedKeys} disabled={loading || adapterEnvLoading} value={selectedApiKey?.id ?? ""} onChange={(id) => {
+                            setGatewayConnection(undefined);
+                            if (connectionModels) setModel("");
+                            setSelectedSavedKey(createdCompanyId ? { companyId: createdCompanyId, envKey: apiKeyEnvKeyFor(adapterType), id } : null);
+                            setApiKey("");
+                          }} />}
+                          {apiKeyFieldSupported && !selectedApiKey && !hasGatewaySelection && !connectionModels && <OnboardingCardField
+                            label="API key"
+                            placeholder="Enter API key here"
+                            masked
+                            // The card is the answer to the tile just pressed, so
+                            // the field is unambiguously the next thing. Carried
+                            // over from the key field this card replaced.
+                            autoFocus
+                            value={apiKey}
+                            onChange={(value) => {
+                              setSelectedSavedKey(createdCompanyId ? { companyId: createdCompanyId, envKey: apiKeyEnvKeyFor(adapterType), id: "" } : null);
+                              setApiKey(value);
+                            }}
+                            onSubmit={() => handleConnectStepPrimary()}
+                          />}
+                          {/* The sources in MODEL_FIELD_SOURCES have no default
+                              model: their adapters deliberately resolve none,
+                              so the model has to come from somewhere before a
+                              run can work. Optional, like the key above — the
+                              host may already hold the source's own env var
+                              (OPENROUTER_MODEL, OLLAMA_MODEL), and the probe
+                              reports the warn either way. Rendered whether or
+                              not a saved key is chosen, because a key and a
+                              model are independent credentials. */}
+                          {modelFieldSource && <OnboardingCardField
+                            label="Model (optional)"
+                            placeholder={modelFieldSource.placeholder}
+                            // Advisory only: the catalog never restricts what
+                            // can be typed, and the probe accepts any id.
+                            list={modelFieldSource.datalistId}
+                            value={model}
+                            onChange={setModel}
+                            onSubmit={() => handleConnectStepPrimary()}
+                          />}
+                          {modelFieldSource && (
+                            <datalist id={modelFieldSource.datalistId}>
+                              {modelSuggestions.map((entry) => (
+                                <option key={entry.id} value={entry.id} />
+                              ))}
+                            </datalist>
+                          )}
+                        </div>
                         {managedProvider && !selectedApiKey && !hasGatewaySelection && !connectionModels && <p className="text-xs text-muted-foreground">This will be your default {CONNECT_SOURCE_NAMES[adapterType] ?? managedProvider} account.</p>}
                         {hasGatewaySelection && (gatewayLookupFailed ? <>
                           <p role="alert" className="text-sm text-destructive">Your saved gateway connection could not be loaded. Retry to choose a model and connect your agent.</p>
