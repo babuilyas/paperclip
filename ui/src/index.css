@@ -2510,6 +2510,14 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
      whole row would make the tile grow as it travelled, which reads as a
      different tile arriving rather than the one just pressed being kept. */
   --sz-source-tile-two-up: calc((100% - 0.75rem) / 2);
+  /* The same hold for a row of three sources. Three tiles share two `gap-3`
+     gutters (1.5rem), so the collapsed survivor keeps the third of the row it
+     had — for the same reason as the two-up token above it. */
+  --sz-source-tile-three-up: calc((100% - 1.5rem) / 3);
+  /* And for four, which is the row the step ships with: Claude Code, Ollama,
+     OpenRouter, Codex. Four tiles share three `gap-3` gutters (2.25rem), so
+     the collapsed survivor keeps the quarter of the row it had. */
+  --sz-source-tile-four-up: calc((100% - 2.25rem) / 4);
   /* The connect step's sign-in card, held at one height across its own states.
      It opens on a spinner and then fills with an instruction and a field, and
      the height is fixed so that arrival is the only movement — a card that grew

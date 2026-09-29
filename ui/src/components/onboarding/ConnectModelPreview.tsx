@@ -37,12 +37,12 @@ import { Stepper } from "./Stepper";
  */
 
 /**
- * The two sources the step offers, matching the shipped step's own list.
+ * The sources the step offers, matching the shipped step's own list.
  *
- * Claude Code and Codex are the only adapters the display registry marks
- * `recommended`, and the real step builds its row from exactly that filter — so
- * a third tile here would be a design the wizard could never render. OpenCode
- * was drawn at one point and is deliberately gone.
+ * The real step builds its row from the display registry's `recommended`
+ * filter, so its tile count changes with the registry and no count belongs in
+ * this comment. This mock keeps the two the design was drawn against; a tile
+ * added there renders in the real wizard the moment it is marked.
  */
 const MODEL_SOURCES: ModelSource[] = [
   {

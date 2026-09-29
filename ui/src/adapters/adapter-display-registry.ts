@@ -78,13 +78,13 @@ const adapterDisplayMap: Record<string, AdapterDisplayInfo> = {
     label: "Claude Code (Ollama)",
     description: "Claude Code CLI harness on a local Ollama server",
     icon: Sparkles,
-    experimental: true,
+    recommended: true,
   },
   claude_openrouter_cloud: {
     label: "Claude Code (OpenRouter)",
     description: "Claude Code CLI harness on one OpenRouter model",
     icon: Sparkles,
-    experimental: true,
+    recommended: true,
   },
   codex_local: {
     label: "Codex",

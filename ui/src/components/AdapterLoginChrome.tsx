@@ -42,13 +42,15 @@ export type AdapterLoginChrome = "panel" | "onboarding";
  * — "Anthropic" is right in a settings panel listing credentials and wrong in a
  * sentence that reads "Sign in to Claude".
  *
- * Three names for two adapters is a tension worth stating rather than hiding.
- * The concepts differ — vendor, tool, account — but if the product decides
- * otherwise, this is the one to delete.
+ * Five entries, and more vendor-than-tool names than adapter rows — a tension
+ * worth stating rather than hiding. The concepts differ — vendor, tool,
+ * account — but if the product decides otherwise, this is the one to delete.
  */
 export const CONNECT_SOURCE_NAMES: Record<string, string> = {
   claude_local: "Claude",
   codex_local: "OpenAI",
+  claude_openrouter_cloud: "OpenRouter",
+  claude_ollama_local: "Ollama",
   grok_local: "Grok",
 };
 
@@ -364,6 +366,7 @@ export function OnboardingCardField({
   placeholder = "Paste authorization code here",
   masked = false,
   autoFocus = false,
+  list,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -388,6 +391,12 @@ export function OnboardingCardField({
    * not where the next action is.
    */
   autoFocus?: boolean;
+  /**
+   * The id of a `<datalist>` offering suggestions for the value. Advisory only:
+   * a browser datalist never restricts what can be typed, so the customer can
+   * enter an id the list does not hold.
+   */
+  list?: string;
 }) {
   return (
     <input
@@ -400,6 +409,7 @@ export function OnboardingCardField({
       placeholder={placeholder}
       value={value}
       disabled={disabled}
+      list={list}
       onChange={(event) => onChange(event.target.value)}
       onPaste={() => onPaste?.()}
       onKeyDown={(event) => {

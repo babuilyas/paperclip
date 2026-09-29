@@ -204,7 +204,9 @@ export function ModelSourceTiles({
         chasing a gap that is still closing.
 
         The wrapper carries the width, not the tile: held at the width it had
-        with two in the row, so the kept tile travels without also growing.
+        in the row that was showing, so the kept tile travels without also
+        growing. The count comes from the row itself rather than a fixed
+        two-up assumption, so each row size collapses at its own width.
       */}
       <AnimatePresence initial={false} mode="popLayout">
         {shown.map((source) => (
@@ -215,7 +217,13 @@ export function ModelSourceTiles({
             exit={{ opacity: 0, transition: SOURCE_EXIT_FADE }}
             className={cn(
               "flex min-w-0",
-              collapsed ? "w-(--sz-source-tile-two-up)" : "flex-1",
+              collapsed
+                ? sources.length >= 4
+                  ? "w-(--sz-source-tile-four-up)"
+                  : sources.length >= 3
+                    ? "w-(--sz-source-tile-three-up)"
+                    : "w-(--sz-source-tile-two-up)"
+                : "flex-1",
             )}
           >
             <ModelSourceTile

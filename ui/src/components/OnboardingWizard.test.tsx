@@ -193,12 +193,14 @@ vi.mock("../adapters/metadata", () => ({ isVisualAdapterChoice: () => true }));
 vi.mock("../adapters/adapter-display-registry", () => ({
   getAdapterDisplay: (type: string) => ({
     type,
-    // Mirrors the real registry, where these two and only these two are
+    // Mirrors the real registry, where these four and only these four are
     // `recommended`. A blanket `false` used to be harmless because every adapter
     // then sat in the "Advanced settings" disclosure and was reachable anyway;
     // with the step down to a tile row built from this flag, it made that row
     // empty in every test and hid the surface under it.
-    recommended: type === "claude_local" || type === "codex_local",
+    recommended:
+      type === "claude_local" || type === "codex_local" ||
+      type === "claude_openrouter_cloud" || type === "claude_ollama_local",
     label: type,
     description: "",
     icon: () => null,
@@ -231,7 +233,13 @@ const ADAPTER_LOGIN_MODES: Record<string, "displayed_code" | "submitted_browser_
 };
 vi.mock("../adapters/use-adapter-capabilities", () => ({
   useAdapterCapabilities: () => (type: string) => ({
-    supportsInstructionsBundle: false,
+    // Mirrors KNOWN_DEFAULTS for the two extra types this suite exercises:
+    // both Claude-harness sources are local claude CLI runs, so the probe
+    // path runs for them. Every other type this suite names stays false,
+    // which is how the rest of these tests read a type the registry does
+    // not list.
+    supportsInstructionsBundle:
+      type === "claude_openrouter_cloud" || type === "claude_ollama_local",
     supportsSkills: false,
     supportsLocalAgentJwt: false,
     requiresMaterializedRuntimeSkills: false,
@@ -1277,6 +1285,389 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
 
       await clickByText((t) => isArcPrimary(t));
       expect(mockAgentsApi.getClaudeOAuthTokenStatus).toHaveBeenCalledTimes(discoveryReads + 2);
+
+      await act(async () => root.unmount());
+    });
+  });
+
+  describe("the OpenRouter source (claude_openrouter_cloud)", () => {
+    // A third recommended source, and the first one with no sign-in at all:
+    // the key and the model are both optional on the card, because the host
+    // may already hold OPENROUTER_API_KEY and OPENROUTER_MODEL, and the probe
+    // is what decides whether the hire can proceed. These tests pin the
+    // pieces of that contract the claude/codex cases cannot: the mode
+    // default, the empty-key gate, the env key the credential lands under,
+    // and the optional model field.
+    beforeEach(() => {
+      // No definition and no stored value yet: the first customer to type a
+      // key. The storage path is the user-secret one — this source has no
+      // managed provider, so `managedApi.create` must never fire for it.
+      mockSecretsApi.listMyUserSecrets.mockResolvedValue([]);
+      mockSecretsApi.createUserSecretDefinition.mockResolvedValue({ id: "def-1" });
+      mockSecretsApi.createMyUserSecret.mockResolvedValue({ id: "secret-abc" });
+    });
+
+    /** Drives to the Connect step and picks the OpenRouter tile. */
+    async function openOpenRouterStep() {
+      // The recommended sources this block exercises, in real registration
+      // order. The shipped row holds one more between Claude Code and
+      // OpenRouter — the Ollama source, covered in the block below.
+      mockAdapterRegistry.list = [
+        { type: "claude_local" },
+        { type: "claude_openrouter_cloud" },
+        { type: "codex_local" },
+      ];
+      mockCompaniesApi.create.mockResolvedValue({ id: "company-new", issuePrefix: "INI" });
+      window.localStorage.setItem(
+        ONBOARDING_STORAGE_KEY,
+        JSON.stringify({ step: 1, companyName: "Initech" }),
+      );
+      mockDialog.onboardingOptions = {};
+      mockCompany.companies = [];
+      mockCompany.loading = false;
+      mockCompaniesApi.list.mockResolvedValue([]);
+
+      const { root, queryClient } = render();
+      await act(async () => {
+        root.render(
+          <QueryClientProvider client={queryClient}>
+            <OnboardingWizard />
+          </QueryClientProvider>,
+        );
+      });
+      await flushReact();
+
+      const clickByText = async (match: (text: string) => boolean) => {
+        const el = [...document.body.querySelectorAll("button")].find((b) =>
+          match(b.textContent?.trim() ?? ""),
+        )!;
+        await act(async () => {
+          el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+        await flushReact();
+      };
+
+      await clickByText((t) => t.startsWith("Continue"));
+      const agentField = document.body.querySelector(
+        "#onboarding-agent-name",
+      ) as HTMLInputElement;
+      await act(async () => {
+        setControlledValue(agentField, "Ada");
+      });
+      await flushReact();
+      await clickByText((t) => isArcPrimary(t));
+      expect(document.body.textContent).toContain("Connect a model");
+
+      // No "Use API keys" press: a source with no sign-in must arrive at the
+      // key card on its own. Picked by the provider name the tile shows.
+      await clickByText((t) => t.includes("OpenRouter"));
+      // The pick starts the collapse-and-open sequence, which runs on its own
+      // timers; let them settle before reading the card.
+      for (let i = 0; i < 5; i++) await flushReact();
+      return { root, clickByText };
+    }
+
+    it("names the third tile for the provider, not the adapter type", async () => {
+      const { root } = await openOpenRouterStep();
+
+      const labels = [...document.body.querySelectorAll("button[aria-checked]")].map(
+        (tile) => tile.textContent ?? "",
+      );
+      expect(labels.length).toBe(3);
+      expect(labels.some((l) => l.includes("Claude"))).toBe(true);
+      expect(labels.some((l) => l.includes("OpenRouter"))).toBe(true);
+      expect(labels.some((l) => l.includes("OpenAI"))).toBe(true);
+      expect(labels.join(" ")).not.toContain("claude_openrouter_cloud");
+
+      await act(async () => root.unmount());
+    });
+
+    it("opens the key card with an optional model field, and Connect live with nothing typed", async () => {
+      mockAgentsApi.adapterModels.mockResolvedValue([
+        { id: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5" },
+        { id: "qwen/qwen3-coder:free", label: "Qwen3 Coder" },
+      ]);
+      const { root } = await openOpenRouterStep();
+      for (let i = 0; i < 3; i++) await flushReact();
+
+      expect(document.body.textContent).toContain(
+        "Paste your OpenRouter API key — or leave it blank to use the OPENROUTER_API_KEY already set on this machine",
+      );
+      const keyField = document.body.querySelector('input[type="password"]');
+      const modelField = document.body.querySelector(
+        'input[aria-label="Model (optional)"]',
+      );
+      expect(keyField).not.toBeNull();
+      expect(modelField).not.toBeNull();
+
+      // The catalog the adapter discovery route already fetched, offered as
+      // advisory suggestions on the model field.
+      const options = [...document.body.querySelectorAll("datalist option")].map(
+        (option) => option.getAttribute("value"),
+      );
+      expect(options).toContain("anthropic/claude-sonnet-4.5");
+      expect(options).toContain("qwen/qwen3-coder:free");
+
+      // The empty key is the contract: the probe decides, not the button.
+      const connect = [...document.body.querySelectorAll("button")].find(
+        (b) => b.textContent?.trim() === "Connect",
+      ) as HTMLButtonElement;
+      expect(connect).toBeDefined();
+      expect(connect.disabled).toBe(false);
+
+      await act(async () => root.unmount());
+    });
+
+    it("hires on blank fields — the host holds the credential, and the probe says so", async () => {
+      const { root, clickByText } = await openOpenRouterStep();
+
+      await clickByText((t) => isArcPrimary(t));
+
+      expect(mockAgentsApi.testEnvironment).toHaveBeenCalled();
+      expect(mockSecretsApi.createUserSecretDefinition).not.toHaveBeenCalled();
+      expect(mockAgentsApi.hire).toHaveBeenCalledTimes(1);
+      const hireArgs = (mockAgentsApi.hire.mock.calls.at(-1) as unknown[]) as [
+        string,
+        { adapterType: string; adapterConfig: { env?: Record<string, unknown> } },
+      ];
+      expect(hireArgs[1].adapterType).toBe("claude_openrouter_cloud");
+      // Nothing was typed, so nothing was bound: the runs resolve the key and
+      // the model from the host env the probe already accepted.
+      expect(hireArgs[1].adapterConfig.env?.OPENROUTER_API_KEY).toBeUndefined();
+
+      await act(async () => root.unmount());
+    });
+
+    it("stores a typed key under OPENROUTER_API_KEY as a user secret and references it, never carries it", async () => {
+      const KEY = "sk-or-v1-typed-by-the-customer";
+      const { root, clickByText } = await openOpenRouterStep();
+
+      const keyField = document.body.querySelector(
+        'input[type="password"]',
+      ) as HTMLInputElement;
+      await act(async () => {
+        setControlledValue(keyField, KEY);
+      });
+      await flushReact();
+      await clickByText((t) => isArcPrimary(t));
+
+      // No managed provider for this source, so the personal user-secret path
+      // is the only one that may run.
+      expect(managedApi.create).not.toHaveBeenCalled();
+      expect(mockSecretsApi.createUserSecretDefinition).toHaveBeenCalledTimes(1);
+      expect(mockSecretsApi.createUserSecretDefinition.mock.calls[0][1]).toMatchObject({
+        key: expect.stringMatching(/^OPENROUTER_API_KEY\.setup\./),
+      });
+
+      const hireArgs = (mockAgentsApi.hire.mock.calls.at(-1) as unknown[]) as [
+        string,
+        Record<string, unknown>,
+      ];
+      const hireBody = JSON.stringify(hireArgs[1]);
+      expect(hireBody).toContain('"OPENROUTER_API_KEY"');
+      // The whole payload, not just that one field: the point is that the key
+      // is nowhere in what gets persisted, however it might be nested.
+      expect(hireBody).not.toContain(KEY);
+
+      await act(async () => root.unmount());
+    });
+
+    it("passes the typed model and permission-skipping through to the built configuration", async () => {
+      const { root, clickByText } = await openOpenRouterStep();
+
+      const modelField = document.body.querySelector(
+        'input[aria-label="Model (optional)"]',
+      ) as HTMLInputElement;
+      await act(async () => {
+        setControlledValue(modelField, "anthropic/claude-sonnet-4.5");
+      });
+      await flushReact();
+      await clickByText((t) => isArcPrimary(t));
+
+      expect(mockAdapterBuild.buildAdapterConfig).toHaveBeenCalledWith(
+        expect.objectContaining({
+          adapterType: "claude_openrouter_cloud",
+          model: "anthropic/claude-sonnet-4.5",
+          // Onboarding runs the first agent non-interactively; an explicit
+          // false here would leave its first run waiting on approval prompts
+          // nothing can answer.
+          dangerouslySkipPermissions: true,
+        }),
+      );
+      expect(mockAgentsApi.hire).toHaveBeenCalledTimes(1);
+
+      await act(async () => root.unmount());
+    });
+  });
+
+  describe("the Ollama source (claude_ollama_local)", () => {
+    // The second keyless recommended source, and the one with no key at all:
+    // the harness forces a fixed auth token against the local server, so the
+    // card asks only for a model — optional, because the host may hold
+    // OLLAMA_MODEL, and the probe is what decides. These tests pin the parts
+    // the OpenRouter cases above cannot: the key field is absent, the
+    // credential paths never run, and a stale saved key from the OpenCode
+    // tile (which shares the "API_KEY" env-key fallback) cannot ride a tile
+    // switch into the hire.
+    beforeEach(() => {
+      mockSecretsApi.listMyUserSecrets.mockResolvedValue([]);
+    });
+
+    /** Drives to the Connect step and picks the Ollama tile. */
+    async function openOllamaStep() {
+      // The real registration order, so the row this builds reads the way
+      // the shipped one does: Claude Code, Ollama, OpenRouter, Codex.
+      mockAdapterRegistry.list = [
+        { type: "claude_local" },
+        { type: "claude_ollama_local" },
+        { type: "claude_openrouter_cloud" },
+        { type: "codex_local" },
+      ];
+      mockCompaniesApi.create.mockResolvedValue({ id: "company-new", issuePrefix: "INI" });
+      window.localStorage.setItem(
+        ONBOARDING_STORAGE_KEY,
+        JSON.stringify({ step: 1, companyName: "Initech" }),
+      );
+      mockDialog.onboardingOptions = {};
+      mockCompany.companies = [];
+      mockCompany.loading = false;
+      mockCompaniesApi.list.mockResolvedValue([]);
+
+      const { root, queryClient } = render();
+      await act(async () => {
+        root.render(
+          <QueryClientProvider client={queryClient}>
+            <OnboardingWizard />
+          </QueryClientProvider>,
+        );
+      });
+      await flushReact();
+
+      const clickByText = async (match: (text: string) => boolean) => {
+        const el = [...document.body.querySelectorAll("button")].find((b) =>
+          match(b.textContent?.trim() ?? ""),
+        )!;
+        await act(async () => {
+          el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+        await flushReact();
+      };
+
+      await clickByText((t) => t.startsWith("Continue"));
+      const agentField = document.body.querySelector(
+        "#onboarding-agent-name",
+      ) as HTMLInputElement;
+      await act(async () => {
+        setControlledValue(agentField, "Ada");
+      });
+      await flushReact();
+      await clickByText((t) => isArcPrimary(t));
+      expect(document.body.textContent).toContain("Connect a model");
+
+      // No "Use API keys" press: a source with no sign-in must arrive at the
+      // key card on its own. Picked by the provider name the tile shows.
+      await clickByText((t) => t.includes("Ollama"));
+      // The pick starts the collapse-and-open sequence, which runs on its own
+      // timers; let them settle before reading the card.
+      for (let i = 0; i < 5; i++) await flushReact();
+      return { root, clickByText };
+    }
+
+    it("names the second tile for the provider, not the adapter type", async () => {
+      const { root } = await openOllamaStep();
+
+      const labels = [...document.body.querySelectorAll("button[aria-checked]")].map(
+        (tile) => tile.textContent ?? "",
+      );
+      expect(labels.length).toBe(4);
+      expect(labels.some((l) => l.includes("Claude"))).toBe(true);
+      expect(labels.some((l) => l.includes("Ollama"))).toBe(true);
+      expect(labels.some((l) => l.includes("OpenRouter"))).toBe(true);
+      expect(labels.some((l) => l.includes("OpenAI"))).toBe(true);
+      expect(labels.join(" ")).not.toContain("claude_ollama_local");
+
+      await act(async () => root.unmount());
+    });
+
+    it("opens the card with a model field and no key field, and Connect live with nothing typed", async () => {
+      mockAgentsApi.adapterModels.mockResolvedValue([
+        { id: "qwen3-coder:latest", label: "Qwen3 Coder" },
+        { id: "llama3.1:8b", label: "Llama 3.1 8B" },
+      ]);
+      const { root } = await openOllamaStep();
+      for (let i = 0; i < 3; i++) await flushReact();
+
+      expect(document.body.textContent).toContain(
+        "No API key needed — Ollama serves models from this machine",
+      );
+      // The source has no key of any kind, so the card does not ask for one.
+      expect(document.body.querySelector('input[type="password"]')).toBeNull();
+      const modelField = document.body.querySelector(
+        'input[aria-label="Model (optional)"]',
+      );
+      expect(modelField).not.toBeNull();
+
+      // The local server's list the adapter discovery route already fetched,
+      // offered as advisory suggestions on the model field.
+      const options = [...document.body.querySelectorAll("datalist option")].map(
+        (option) => option.getAttribute("value"),
+      );
+      expect(options).toContain("qwen3-coder:latest");
+      expect(options).toContain("llama3.1:8b");
+
+      // The empty card is the contract: the probe decides, not the button.
+      const connect = [...document.body.querySelectorAll("button")].find(
+        (b) => b.textContent?.trim() === "Connect",
+      ) as HTMLButtonElement;
+      expect(connect).toBeDefined();
+      expect(connect.disabled).toBe(false);
+
+      await act(async () => root.unmount());
+    });
+
+    it("hires on blank fields — and no credential path runs", async () => {
+      const { root, clickByText } = await openOllamaStep();
+
+      await clickByText((t) => isArcPrimary(t));
+
+      expect(mockAgentsApi.testEnvironment).toHaveBeenCalled();
+      expect(mockSecretsApi.createUserSecretDefinition).not.toHaveBeenCalled();
+      expect(mockAgentsApi.hire).toHaveBeenCalledTimes(1);
+      const hireArgs = (mockAgentsApi.hire.mock.calls.at(-1) as unknown[]) as [
+        string,
+        { adapterType: string; adapterConfig: { env?: Record<string, unknown> } },
+      ];
+      expect(hireArgs[1].adapterType).toBe("claude_ollama_local");
+      // Nothing to bind: the source has no key, and the fallback env key it
+      // shares with OpenCode must not pick up a stale selection either.
+      expect(hireArgs[1].adapterConfig.env?.API_KEY).toBeUndefined();
+
+      await act(async () => root.unmount());
+    });
+
+    it("passes the typed model and permission-skipping through to the built configuration", async () => {
+      const { root, clickByText } = await openOllamaStep();
+
+      const modelField = document.body.querySelector(
+        'input[aria-label="Model (optional)"]',
+      ) as HTMLInputElement;
+      await act(async () => {
+        setControlledValue(modelField, "qwen3-coder:latest");
+      });
+      await flushReact();
+      await clickByText((t) => isArcPrimary(t));
+
+      expect(mockAdapterBuild.buildAdapterConfig).toHaveBeenCalledWith(
+        expect.objectContaining({
+          adapterType: "claude_ollama_local",
+          model: "qwen3-coder:latest",
+          // Onboarding runs the first agent non-interactively; an explicit
+          // false here would leave its first run waiting on approval prompts
+          // nothing can answer.
+          dangerouslySkipPermissions: true,
+        }),
+      );
+      expect(mockAgentsApi.hire).toHaveBeenCalledTimes(1);
 
       await act(async () => root.unmount());
     });
